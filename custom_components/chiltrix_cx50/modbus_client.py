@@ -122,13 +122,14 @@ class ChiltrixModbusClient:
                 return None
 
         try:
-            # Use positional arguments for compatibility with different pymodbus versions
+            # Fixed for pymodbus 3.x - use device_id parameter instead of slave
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                self.client.read_holding_registers,
-                address,
-                count,
-                self.slave_id,
+                lambda: self.client.read_holding_registers(
+                    address=address,
+                    count=count,
+                    device_id=self.slave_id,
+                )
             )
 
             if result.isError():
@@ -164,12 +165,14 @@ class ChiltrixModbusClient:
                 return False
 
         try:
+            # Fixed for pymodbus 3.x - use device_id parameter instead of slave
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                self.client.write_register,
-                address,
-                value,
-                self.slave_id,
+                lambda: self.client.write_register(
+                    address=address,
+                    value=value,
+                    device_id=self.slave_id,
+                )
             )
 
             if result.isError():
@@ -204,12 +207,14 @@ class ChiltrixModbusClient:
                 return False
 
         try:
+            # Fixed for pymodbus 3.x - use device_id parameter instead of slave
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                self.client.write_registers,
-                address,
-                values,
-                self.slave_id,
+                lambda: self.client.write_registers(
+                    address=address,
+                    values=values,
+                    device_id=self.slave_id,
+                )
             )
 
             if result.isError():
@@ -248,12 +253,14 @@ class ChiltrixModbusClient:
                 return None
 
         try:
+            # Fixed for pymodbus 3.x - use device_id parameter instead of slave
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                self.client.read_coils,
-                address,
-                count,
-                self.slave_id,
+                lambda: self.client.read_coils(
+                    address=address,
+                    count=count,
+                    device_id=self.slave_id,
+                )
             )
 
             if result.isError():
@@ -288,12 +295,14 @@ class ChiltrixModbusClient:
                 return False
 
         try:
+            # Fixed for pymodbus 3.x - use device_id parameter instead of slave
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                self.client.write_coil,
-                address,
-                value,
-                self.slave_id,
+                lambda: self.client.write_coil(
+                    address=address,
+                    value=value,
+                    device_id=self.slave_id,
+                )
             )
 
             if result.isError():
