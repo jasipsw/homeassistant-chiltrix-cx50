@@ -9,7 +9,7 @@ CONF_SCAN_INTERVAL = "scan_interval"
 # Default values
 DEFAULT_PORT = 502
 DEFAULT_SLAVE_ID = 1
-DEFAULT_SCAN_INTERVAL = 30
+DEFAULT_SCAN_INTERVAL = 60
 
 # Modbus Register Definitions (based on CX34/CX35 and typical heat pump registers)
 # These addresses may need adjustment based on actual CX50-2 documentation
