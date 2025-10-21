@@ -1,0 +1,35 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Chiltrix CX50-2",
+        "description": "Enter the connection details for your Chiltrix CX50-2 heat pump connected via Waveshare RS485 to Modbus TCP device.",
+        "data": {
+          "host": "IP Address",
+          "port": "Port",
+          "slave_id": "Modbus Slave ID",
+          "scan_interval": "Scan Interval (seconds)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the device. Please check the IP address, port, and ensure the Waveshare RS485 device is powered on and connected.",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "This device is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Chiltrix CX50-2 Options",
+        "description": "Configure options for your Chiltrix CX50-2 heat pump.",
+        "data": {
+          "slave_id": "Modbus Slave ID",
+          "scan_interval": "Scan Interval (seconds)"
+        }
+      }
+    }
+  }
+}

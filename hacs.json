@@ -1,0 +1,5 @@
+{
+  "name": "Chiltrix CX50-2 Heat Pump",
+  "render_readme": true,
+  "domains": ["sensor", "binary_sensor", "climate", "switch", "number", "select"]
+}
