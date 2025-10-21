@@ -1,60 +1,76 @@
-"""The Chiltrix CX50-2 Heat Pump integration."""
+"""The Chiltrix CX50 integration."""
 from __future__ import annotations
 
 import logging
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
+from homeassistant.const import CONF_HOST, CONF_PORT, CONF_SCAN_INTERVAL, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_SLAVE_ID
 from .modbus_client import ChiltrixModbusClient
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
-    Platform.BINARY_SENSOR,
+    Platform.CLIMATE,
+    Platform.SWITCH,
     Platform.NUMBER,
     Platform.SELECT,
-    Platform.SWITCH,
-    Platform.CLIMATE,
 ]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Chiltrix CX50-2 from a config entry."""
-    host = entry.data["host"]
-    port = entry.data["port"]
-    slave_id = entry.data.get("slave_id", 1)
-    scan_interval = entry.data.get("scan_interval", 30)
+    """Set up Chiltrix CX50 from a config entry."""
+    host = entry.data[CONF_HOST]
+    port = entry.data[CONF_PORT]
+    slave_id = entry.data[CONF_SLAVE_ID]
+    scan_interval = entry.data[CONF_SCAN_INTERVAL]
 
-    # Initialize Modbus client
-    client = ChiltrixModbusClient(host, port, slave_id)
-    
+    # Create Modbus client
+    client = ChiltrixModbusClient(host=host, port=port, slave_id=slave_id)
+
     # Test connection
-    try:
-        await hass.async_add_executor_job(client.connect)
-    except Exception as err:
-        _LOGGER.error("Failed to connect to Chiltrix at %s:%s - %s", host, port, err)
-        raise ConfigEntryNotReady(f"Cannot connect to device: {err}") from err
+    if not await client.connect():
+        raise ConfigEntryNotReady(
+            f"Failed to connect to Chiltrix CX50 at {host}:{port}"
+        )
 
     async def async_update_data():
-        """Fetch data from Chiltrix."""
+        """Fetch data from the device."""
         try:
-            return await hass.async_add_executor_job(client.read_all_registers)
+            # Read all registers needed for sensors
+            # This is a placeholder - adjust based on your actual register map
+            data = {}
+            
+            # Example: Read various registers
+            # You'll need to adjust these based on your const.py register definitions
+            for register_name, register_addr in [
+                ("water_inlet_temp", 0xCA),
+                ("water_outlet_temp", 0xCB),
+                ("ambient_temp", 0xCC),
+                ("operating_state", 0xF3),
+            ]:
+                result = await client.read_holding_registers(register_addr, 1)
+                if result is not None:
+                    data[register_name] = result[0]
+                else:
+                    _LOGGER.warning(f"Failed to read {register_name} at {register_addr}")
+
+            return data
+
         except Exception as err:
-            _LOGGER.error("Error communicating with Chiltrix: %s", err)
             raise UpdateFailed(f"Error communicating with device: {err}") from err
 
-    # Create data update coordinator
+    # Create update coordinator
     coordinator = DataUpdateCoordinator(
         hass,
         _LOGGER,
-        name=f"Chiltrix CX50-2 {host}",
+        name=f"Chiltrix CX50 {host}",
         update_method=async_update_data,
         update_interval=timedelta(seconds=scan_interval),
     )
@@ -69,7 +85,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "client": client,
     }
 
-    # Forward entry setup to platforms
+    # Forward setup to platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
@@ -77,11 +93,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    # Unload platforms
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    
+
     if unload_ok:
+        # Close Modbus connection
         client = hass.data[DOMAIN][entry.entry_id]["client"]
-        await hass.async_add_executor_job(client.close)
+        await client.disconnect()
+
+        # Remove entry from hass.data
         hass.data[DOMAIN].pop(entry.entry_id)
 
     return unload_ok
