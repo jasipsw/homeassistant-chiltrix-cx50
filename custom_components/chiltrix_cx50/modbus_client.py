@@ -1,341 +1,318 @@
-"""Modbus client for Chiltrix CX50-2 heat pump."""
+"""Modbus TCP client for Chiltrix CX50."""
 import logging
-from typing import Any
-
+import asyncio
+from typing import Any, Optional
 from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ModbusException
-
-from .const import (
-    REGISTER_AMBIENT_TEMP,
-    REGISTER_COIL_TEMP,
-    REGISTER_COMPRESSOR_SPEED,
-    REGISTER_COMPRESSOR_STARTS,
-    REGISTER_COOLING_CAPACITY,
-    REGISTER_COP,
-    REGISTER_CURRENT_POWER,
-    REGISTER_DEFROST_COUNT,
-    REGISTER_DISCHARGE_TEMP,
-    REGISTER_ERROR_CODE,
-    REGISTER_FAN_SPEED,
-    REGISTER_FLOW_RATE,retry
-    REGISTER_HEATING_CAPACITY,
-    REGISTER_OPERATING_STATE,
-    REGISTER_PUMP_SPEED,
-    REGISTER_RUN_HOURS,
-    REGISTER_RUN_HOURS_LOW,
-    REGISTER_SUCTION_TEMP,
-    REGISTER_SYSTEM_PRESSURE,
-    REGISTER_WATER_INLET_TEMP,
-    REGISTER_WATER_OUTLET_TEMP,
-    REGISTER_SETPOINT_TEMP,
-    REGISTER_OPERATION_MODE,
-    REGISTER_FAN_MODE,
-    REGISTER_MIN_PUMP_SPEED,
-    REGISTER_MAX_PUMP_SPEED,
-    REGISTER_DHW_SETPOINT,
-    REGISTER_DHW_MODE,
-    REGISTER_ANTIFREEZE_TEMP,
-    REGISTER_MAX_OUTLET_TEMP,
-    REGISTER_MIN_OUTLET_TEMP,
-    COIL_POWER,
-    COIL_HEATING_MODE,
-    COIL_COOLING_MODE,
-    COIL_DHW_MODE,
-    COIL_SILENT_MODE,
-    COIL_DEFROST_MODE,
-    COIL_PUMP_ENABLE,
-    TEMP_SCALE,
-    MODE_HEAT,
-    MODE_COOL,
-    STATE_DEFROST,
-)
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class ChiltrixModbusClient:
-    """Modbus client for Chiltrix heat pump."""
+    """Modbus TCP client for Chiltrix CX50 heat pump."""
 
-    def __init__(self, host: str, port: int, slave_id: int):
-        """Initialize the Modbus client."""
+    def __init__(
+        self,
+        host: str,
+        port: int = 502,
+        slave_id: int = 1,
+        timeout: int = 5,
+        retries: int = 3,
+    ):
+        """Initialize the Modbus client.
+        
+        Args:
+            host: IP address of the Modbus TCP device
+            port: Modbus TCP port (default: 502)
+            slave_id: Modbus slave/unit ID (default: 1)
+            timeout: Connection timeout in seconds (default: 5)
+            retries: Number of retry attempts (default: 3)
+        """
         self.host = host
         self.port = port
         self.slave_id = slave_id
+        self.timeout = timeout
+        self.retries = retries
         self.client = None
-        self._lock = None
+        
+        _LOGGER.info(
+            f"Initializing Modbus client for {host}:{port}, slave_id={slave_id}"
+        )
 
-    def connect(self) -> bool:
-        """Connect to the Modbus device."""
+    async def connect(self) -> bool:
+        """Connect to the Modbus device.
+        
+        Returns:
+            bool: True if connection successful, False otherwise
+        """
         try:
-            import threading
-            self._lock = threading.Lock()
+            # Close any existing connection
+            if self.client and self.client.connected:
+                _LOGGER.debug("Closing existing connection before reconnecting")
+                self.client.close()
+                await asyncio.sleep(0.5)  # Give time for cleanup
             
+            # Create new client instance
             self.client = ModbusTcpClient(
                 host=self.host,
                 port=self.port,
-                timeout=5,
-                retries=1,
-                close_comm_on_error=False,
-                strict=False,
+                timeout=self.timeout,
+                retries=self.retries,
             )
-            result = self.client.connect()
+            
+            # Attempt connection
+            result = await asyncio.get_event_loop().run_in_executor(
+                None, self.client.connect
+            )
+            
             if result:
-                _LOGGER.info("Connected to Chiltrix at %s:%s", self.host, self.port)
+                _LOGGER.info(f"Successfully connected to {self.host}:{self.port}")
+            else:
+                _LOGGER.error(f"Failed to connect to {self.host}:{self.port}")
+                
             return result
-        except Exception as err:
-            _LOGGER.error("Connection failed: %s", err)
+            
+        except Exception as e:
+            _LOGGER.error(f"Connection error: {e}", exc_info=True)
             return False
+
+    async def disconnect(self):
+        """Disconnect from the Modbus device."""
+        try:
+            if self.client:
+                await asyncio.get_event_loop().run_in_executor(
+                    None, self.client.close
+                )
+                _LOGGER.info("Disconnected from Modbus device")
+        except Exception as e:
+            _LOGGER.debug(f"Error during disconnect: {e}")
 
     def close(self):
-        """Close the Modbus connection."""
-        if self.client:
-            self.client.close()
-
-    def read_input_register(self, address: int) -> int | None:
-        """Read a single input register."""
-        if self._lock:
-            with self._lock:
-                return self._read_input_register_internal(address)
-        return self._read_input_register_internal(address)
-    
-    def _read_input_register_internal(self, address: int) -> int | None:
-        """Internal method to read input register."""
+        """Synchronous close method for compatibility."""
         try:
-            import time
-            time.sleep(0.05)  # Small delay between requests
-            result = self.client.read_input_registers(
-                address=address, count=1, slave=self.slave_id
-            )
-            if not result.isError():
-                return result.registers[0]
-        except (ModbusException, AttributeError) as err:
-            _LOGGER.debug("Error reading register %s: %s", address, err)
-        except Exception as err:
-            _LOGGER.debug("Unexpected error reading register %s: %s", address, err)
-        return None
+            if self.client:
+                self.client.close()
+        except Exception as e:
+            _LOGGER.debug(f"Error closing connection: {e}")
 
-    def read_holding_register(self, address: int) -> int | None:
-        """Read a single holding register."""
-        if self._lock:
-            with self._lock:
-                return self._read_holding_register_internal(address)
-        return self._read_holding_register_internal(address)
-    
-    def _read_holding_register_internal(self, address: int) -> int | None:
-        """Internal method to read holding register."""
-        try:
-            import time
-            time.sleep(0.05)  # Small delay between requests
-            result = self.client.read_holding_registers(
-                address=address, count=1, slave=self.slave_id
-            )
-            if not result.isError():
-                return result.registers[0]
-        except (ModbusException, AttributeError) as err:
-            _LOGGER.debug("Error reading holding register %s: %s", address, err)
-        except Exception as err:
-            _LOGGER.debug("Unexpected error reading holding register %s: %s", address, err)
-        return None
-
-    def write_holding_register(self, address: int, value: int) -> bool:
-        """Write a single holding register."""
-        try:
-            result = self.client.write_register(
-                address=address, value=value, slave=self.slave_id
-            )
-            return not result.isError()
-        except (ModbusException, AttributeError) as err:
-            _LOGGER.error("Error writing register %s: %s", address, err)
-            return False
-
-    def read_coil(self, address: int) -> bool | None:
-        """Read a single coil."""
-        try:
-            result = self.client.read_coils(
-                address=address, count=1, slave=self.slave_id
-            )
-            if not result.isError():
-                return result.bits[0]
-        except (ModbusException, AttributeError) as err:
-            _LOGGER.error("Error reading coil %s: %s", address, err)
-        return None
-
-    def write_coil(self, address: int, value: bool) -> bool:
-        """Write a single coil."""
-        try:
-            result = self.client.write_coil(
-                address=address, value=value, slave=self.slave_id
-            )
-            return not result.isError()
-        except (ModbusException, AttributeError) as err:
-            _LOGGER.error("Error writing coil %s: %s", address, err)
-            return False
-
-    def read_all_registers(self) -> dict[str, Any]:
-        """Read all registers and return as dictionary."""
-        data = {}
+    @property
+    def is_connected(self) -> bool:
+        """Check if client is connected.
         
-        if self._lock:
-            with self._lock:
-                return self._read_all_registers_internal()
-        return self._read_all_registers_internal()
-    
-    def _read_all_registers_internal(self) -> dict[str, Any]:
-        """Internal method to read all registers."""
-        import time
-        data = {}
+        Returns:
+            bool: True if connected, False otherwise
+        """
+        return self.client is not None and self.client.connected
 
-        # Try to read input registers in bulk first (more efficient)
+    async def read_holding_registers(
+        self, address: int, count: int = 1
+    ) -> Optional[list[int]]:
+        """Read holding registers from the device.
+        
+        Args:
+            address: Starting register address
+            count: Number of registers to read (default: 1)
+            
+        Returns:
+            list[int]: Register values, or None if error
+        """
+        if not self.is_connected:
+            _LOGGER.warning("Not connected, attempting to reconnect...")
+            if not await self.connect():
+                return None
+
         try:
-            time.sleep(0.1)
-            result = self.client.read_input_registers(
-                address=REGISTER_WATER_INLET_TEMP, count=23, slave=self.slave_id
+            result = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self.client.read_holding_registers(
+                    address=address,
+                    count=count,
+                    slave=self.slave_id,
+                ),
             )
-            if not result.isError() and len(result.registers) >= 23:
-                registers = result.registers
-                # Parse temperature values (stored as value * 10)
-                data["water_inlet_temp"] = self._convert_temp(registers[0])
-                data["water_outlet_temp"] = self._convert_temp(registers[1])
-                data["ambient_temp"] = self._convert_temp(registers[2])
-                data["coil_temp"] = self._convert_temp(registers[3])
-                data["discharge_temp"] = self._convert_temp(registers[4])
-                data["suction_temp"] = self._convert_temp(registers[5])
-                # Parse other values
-                data["current_power"] = registers[10]
-                data["flow_rate"] = registers[11]
-                data["compressor_speed"] = registers[12]
-                data["fan_speed"] = registers[13]
-                data["pump_speed"] = registers[14]
-                data["system_pressure"] = registers[15]
-                data["error_code"] = registers[20]
-                data["operating_state"] = registers[21]
-                data["run_hours_high"] = registers[22]
-        except Exception as err:
-            _LOGGER.debug("Bulk read failed, falling back to individual reads: %s", err)
-            # Fallback to individual reads
-            registers_to_read = {
-                "water_inlet_temp": REGISTER_WATER_INLET_TEMP,
-                "water_outlet_temp": REGISTER_WATER_OUTLET_TEMP,
-                "ambient_temp": REGISTER_AMBIENT_TEMP,
-                "coil_temp": REGISTER_COIL_TEMP,
-                "discharge_temp": REGISTER_DISCHARGE_TEMP,
-                "suction_temp": REGISTER_SUCTION_TEMP,
-                "current_power": REGISTER_CURRENT_POWER,
-                "flow_rate": REGISTER_FLOW_RATE,
-                "compressor_speed": REGISTER_COMPRESSOR_SPEED,
-                "fan_speed": REGISTER_FAN_SPEED,
-                "pump_speed": REGISTER_PUMP_SPEED,
-                "system_pressure": REGISTER_SYSTEM_PRESSURE,
-                "error_code": REGISTER_ERROR_CODE,
-                "operating_state": REGISTER_OPERATING_STATE,
-                "run_hours_high": REGISTER_RUN_HOURS,
-            }
 
-            for key, register in registers_to_read.items():
-                value = self._read_input_register_internal(register)
-                if value is not None:
-                    if "temp" in key:
-                        data[key] = self._convert_temp(value)
-                    else:
-                        data[key] = value
+            if result.isError():
+                _LOGGER.error(
+                    f"Error reading registers at address {address}: {result}"
+                )
+                return None
 
-        # Read additional registers individually
-        time.sleep(0.1)
-        value = self._read_input_register_internal(REGISTER_RUN_HOURS_LOW)
-        if value is not None:
-            data["run_hours_low"] = value
+            return result.registers
 
-        time.sleep(0.05)
-        value = self._read_input_register_internal(REGISTER_COMPRESSOR_STARTS)
-        if value is not None:
-            data["compressor_starts"] = value
+        except ModbusException as e:
+            _LOGGER.error(f"Modbus exception reading address {address}: {e}")
+            return None
+        except Exception as e:
+            _LOGGER.error(
+                f"Unexpected error reading address {address}: {e}", exc_info=True
+            )
+            return None
 
-        time.sleep(0.05)
-        value = self._read_input_register_internal(REGISTER_DEFROST_COUNT)
-        if value is not None:
-            data["defrost_count"] = value
+    async def write_register(self, address: int, value: int) -> bool:
+        """Write a single register to the device.
+        
+        Args:
+            address: Register address
+            value: Value to write
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not self.is_connected:
+            _LOGGER.warning("Not connected, attempting to reconnect...")
+            if not await self.connect():
+                return False
 
-        time.sleep(0.05)
-        value = self._read_input_register_internal(REGISTER_COP)
-        if value is not None:
-            data["cop"] = value / 10
+        try:
+            result = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self.client.write_register(
+                    address=address,
+                    value=value,
+                    slave=self.slave_id,
+                ),
+            )
 
-        time.sleep(0.05)
-        value = self._read_input_register_internal(REGISTER_HEATING_CAPACITY)
-        if value is not None:
-            data["heating_capacity"] = value / 10
+            if result.isError():
+                _LOGGER.error(f"Error writing register at address {address}: {result}")
+                return False
 
-        time.sleep(0.05)
-        value = self._read_input_register_internal(REGISTER_COOLING_CAPACITY)
-        if value is not None:
-            data["cooling_capacity"] = value / 10
+            _LOGGER.debug(f"Successfully wrote {value} to register {address}")
+            return True
 
-        # Calculate total run hours
-        if "run_hours_high" in data and "run_hours_low" in data:
-            data["run_hours"] = (data["run_hours_high"] << 16) | data["run_hours_low"]
+        except ModbusException as e:
+            _LOGGER.error(f"Modbus exception writing address {address}: {e}")
+            return False
+        except Exception as e:
+            _LOGGER.error(
+                f"Unexpected error writing address {address}: {e}", exc_info=True
+            )
+            return False
 
-        # Read holding registers (control values)
-        holding_registers = {
-            "setpoint_temp": REGISTER_SETPOINT_TEMP,
-            "operation_mode": REGISTER_OPERATION_MODE,
-            "fan_mode": REGISTER_FAN_MODE,
-            "min_pump_speed": REGISTER_MIN_PUMP_SPEED,
-            "max_pump_speed": REGISTER_MAX_PUMP_SPEED,
-            "dhw_setpoint": REGISTER_DHW_SETPOINT,
-            "dhw_mode": REGISTER_DHW_MODE,
-            "antifreeze_temp": REGISTER_ANTIFREEZE_TEMP,
-            "max_outlet_temp": REGISTER_MAX_OUTLET_TEMP,
-            "min_outlet_temp": REGISTER_MIN_OUTLET_TEMP,
-        }
+    async def write_registers(self, address: int, values: list[int]) -> bool:
+        """Write multiple registers to the device.
+        
+        Args:
+            address: Starting register address
+            values: List of values to write
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not self.is_connected:
+            _LOGGER.warning("Not connected, attempting to reconnect...")
+            if not await self.connect():
+                return False
 
-        for key, register in holding_registers.items():
-            time.sleep(0.05)
-            value = self._read_holding_register_internal(register)
-            if value is not None:
-                if "temp" in key:
-                    data[key] = self._convert_temp(value)
-                else:
-                    data[key] = value
+        try:
+            result = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self.client.write_registers(
+                    address=address,
+                    values=values,
+                    slave=self.slave_id,
+                ),
+            )
 
-        # Read coils (binary values) - skip for now to reduce errors
-        # Can be enabled later once transaction ID issues are resolved
-        data["power"] = True  # Assume on if we're getting data
-        data["heating_mode"] = data.get("operation_mode") == MODE_HEAT
-        data["cooling_mode"] = data.get("operation_mode") == MODE_COOL
-        data["dhw_mode_active"] = False
-        data["silent_mode"] = False
-        data["defrost_active"] = data.get("operating_state") == STATE_DEFROST
-        data["pump_enabled"] = True
+            if result.isError():
+                _LOGGER.error(
+                    f"Error writing registers at address {address}: {result}"
+                )
+                return False
 
-        return data
-    
-    def _convert_temp(self, value: int) -> float:
-        """Convert temperature value from register."""
-        if value > 32767:
-            value = value - 65536
-        return value / TEMP_SCALE
+            _LOGGER.debug(
+                f"Successfully wrote {len(values)} registers starting at {address}"
+            )
+            return True
 
-    def set_setpoint(self, temperature: float) -> bool:
-        """Set the target water temperature."""
-        value = int(temperature * TEMP_SCALE)
-        return self.write_holding_register(REGISTER_SETPOINT_TEMP, value)
+        except ModbusException as e:
+            _LOGGER.error(f"Modbus exception writing address {address}: {e}")
+            return False
+        except Exception as e:
+            _LOGGER.error(
+                f"Unexpected error writing address {address}: {e}", exc_info=True
+            )
+            return False
 
-    def set_operation_mode(self, mode: int) -> bool:
-        """Set the operation mode."""
-        return self.write_holding_register(REGISTER_OPERATION_MODE, mode)
+    async def read_coils(self, address: int, count: int = 1) -> Optional[list[bool]]:
+        """Read coils from the device.
+        
+        Args:
+            address: Starting coil address
+            count: Number of coils to read (default: 1)
+            
+        Returns:
+            list[bool]: Coil values, or None if error
+        """
+        if not self.is_connected:
+            _LOGGER.warning("Not connected, attempting to reconnect...")
+            if not await self.connect():
+                return None
 
-    def set_fan_mode(self, mode: int) -> bool:
-        """Set the fan mode."""
-        return self.write_holding_register(REGISTER_FAN_MODE, mode)
+        try:
+            result = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self.client.read_coils(
+                    address=address,
+                    count=count,
+                    slave=self.slave_id,
+                ),
+            )
 
-    def set_power(self, state: bool) -> bool:
-        """Turn the heat pump on or off."""
-        return self.write_coil(COIL_POWER, state)
+            if result.isError():
+                _LOGGER.error(f"Error reading coils at address {address}: {result}")
+                return None
 
-    def set_dhw_mode(self, state: bool) -> bool:
-        """Enable or disable DHW priority mode."""
-        return self.write_coil(COIL_DHW_MODE, state)
+            return result.bits[:count]
 
-    def set_silent_mode(self, state: bool) -> bool:
-        """Enable or disable silent mode."""
-        return self.write_coil(COIL_SILENT_MODE, state)
+        except ModbusException as e:
+            _LOGGER.error(f"Modbus exception reading coils at address {address}: {e}")
+            return None
+        except Exception as e:
+            _LOGGER.error(
+                f"Unexpected error reading coils at address {address}: {e}",
+                exc_info=True,
+            )
+            return None
+
+    async def write_coil(self, address: int, value: bool) -> bool:
+        """Write a single coil to the device.
+        
+        Args:
+            address: Coil address
+            value: Value to write (True/False)
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not self.is_connected:
+            _LOGGER.warning("Not connected, attempting to reconnect...")
+            if not await self.connect():
+                return False
+
+        try:
+            result = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self.client.write_coil(
+                    address=address,
+                    value=value,
+                    slave=self.slave_id,
+                ),
+            )
+
+            if result.isError():
+                _LOGGER.error(f"Error writing coil at address {address}: {result}")
+                return False
+
+            _LOGGER.debug(f"Successfully wrote {value} to coil {address}")
+            return True
+
+        except ModbusException as e:
+            _LOGGER.error(f"Modbus exception writing coil at address {address}: {e}")
+            return False
+        except Exception as e:
+            _LOGGER.error(
+                f"Unexpected error writing coil at address {address}: {e}",
+                exc_info=True,
+            )
+            return False
