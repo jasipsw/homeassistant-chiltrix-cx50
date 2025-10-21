@@ -127,7 +127,7 @@ class ChiltrixModbusClient:
                 lambda: self.client.read_holding_registers(
                     address=address,
                     count=count,
-                    slave=self.slave_id,
+                    unit=self.slave_id,  # Changed from 'slave' to 'unit'
                 ),
             )
 
@@ -169,7 +169,7 @@ class ChiltrixModbusClient:
                 lambda: self.client.write_register(
                     address=address,
                     value=value,
-                    slave=self.slave_id,
+                    unit=self.slave_id,  # Changed from 'slave' to 'unit'
                 ),
             )
 
@@ -210,7 +210,7 @@ class ChiltrixModbusClient:
                 lambda: self.client.write_registers(
                     address=address,
                     values=values,
-                    slave=self.slave_id,
+                    unit=self.slave_id,  # Changed from 'slave' to 'unit'
                 ),
             )
 
@@ -255,7 +255,7 @@ class ChiltrixModbusClient:
                 lambda: self.client.read_coils(
                     address=address,
                     count=count,
-                    slave=self.slave_id,
+                    unit=self.slave_id,  # Changed from 'slave' to 'unit'
                 ),
             )
 
@@ -296,7 +296,7 @@ class ChiltrixModbusClient:
                 lambda: self.client.write_coil(
                     address=address,
                     value=value,
-                    slave=self.slave_id,
+                    unit=self.slave_id,  # Changed from 'slave' to 'unit'
                 ),
             )
 
