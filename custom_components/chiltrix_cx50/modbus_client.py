@@ -17,7 +17,7 @@ from .const import (
     REGISTER_DISCHARGE_TEMP,
     REGISTER_ERROR_CODE,
     REGISTER_FAN_SPEED,
-    REGISTER_FLOW_RATE,
+    REGISTER_FLOW_RATE,retry
     REGISTER_HEATING_CAPACITY,
     REGISTER_OPERATING_STATE,
     REGISTER_PUMP_SPEED,
@@ -75,7 +75,7 @@ class ChiltrixModbusClient:
                 port=self.port,
                 timeout=5,
                 retries=1,
-                retry_on_empty=False,
+                #retry_on_empty=False,
                 close_comm_on_error=False,
                 strict=False,
             )
