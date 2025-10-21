@@ -52,13 +52,16 @@ class ChiltrixModbusClient:
                 self.client.close()
                 await asyncio.sleep(0.5)  # Give time for cleanup
             
-            # Create new client instance
+            # Create new client instance with slave/unit specified
             self.client = ModbusTcpClient(
                 host=self.host,
                 port=self.port,
                 timeout=self.timeout,
                 retries=self.retries,
             )
+            
+            # Set the slave/unit ID on the client
+            self.client.params.unit_id = self.slave_id
             
             # Attempt connection
             result = await asyncio.get_event_loop().run_in_executor(
@@ -122,13 +125,13 @@ class ChiltrixModbusClient:
                 return None
 
         try:
+            # Use positional arguments for compatibility with different pymodbus versions
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: self.client.read_holding_registers(
-                    address=address,
-                    count=count,
-                    unit=self.slave_id,  # Changed from 'slave' to 'unit'
-                ),
+                self.client.read_holding_registers,
+                address,
+                count,
+                self.slave_id,
             )
 
             if result.isError():
@@ -166,11 +169,10 @@ class ChiltrixModbusClient:
         try:
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: self.client.write_register(
-                    address=address,
-                    value=value,
-                    unit=self.slave_id,  # Changed from 'slave' to 'unit'
-                ),
+                self.client.write_register,
+                address,
+                value,
+                self.slave_id,
             )
 
             if result.isError():
@@ -207,11 +209,10 @@ class ChiltrixModbusClient:
         try:
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: self.client.write_registers(
-                    address=address,
-                    values=values,
-                    unit=self.slave_id,  # Changed from 'slave' to 'unit'
-                ),
+                self.client.write_registers,
+                address,
+                values,
+                self.slave_id,
             )
 
             if result.isError():
@@ -252,11 +253,10 @@ class ChiltrixModbusClient:
         try:
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: self.client.read_coils(
-                    address=address,
-                    count=count,
-                    unit=self.slave_id,  # Changed from 'slave' to 'unit'
-                ),
+                self.client.read_coils,
+                address,
+                count,
+                self.slave_id,
             )
 
             if result.isError():
@@ -293,11 +293,10 @@ class ChiltrixModbusClient:
         try:
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: self.client.write_coil(
-                    address=address,
-                    value=value,
-                    unit=self.slave_id,  # Changed from 'slave' to 'unit'
-                ),
+                self.client.write_coil,
+                address,
+                value,
+                self.slave_id,
             )
 
             if result.isError():
