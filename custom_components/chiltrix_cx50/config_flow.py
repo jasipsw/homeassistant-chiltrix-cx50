@@ -1,4 +1,4 @@
-"""Config flow for Chiltrix CX50-2 integration."""
+"""Config flow for Chiltrix CX50 integration."""
 from __future__ import annotations
 
 import logging
@@ -7,53 +7,58 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_HOST, CONF_PORT
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
-import homeassistant.helpers.config_validation as cv
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.const import CONF_HOST, CONF_PORT, CONF_SCAN_INTERVAL
 
-from .const import (
-    CONF_SCAN_INTERVAL,
-    CONF_SLAVE_ID,
-    DEFAULT_PORT,
-    DEFAULT_SCAN_INTERVAL,
-    DEFAULT_SLAVE_ID,
-    DOMAIN,
-)
+from .const import DOMAIN, CONF_SLAVE_ID, DEFAULT_PORT, DEFAULT_SLAVE_ID, DEFAULT_SCAN_INTERVAL
 from .modbus_client import ChiltrixModbusClient
 
 _LOGGER = logging.getLogger(__name__)
 
+STEP_USER_DATA_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_HOST): str,
+        vol.Optional(CONF_PORT, default=DEFAULT_PORT): int,
+        vol.Optional(CONF_SLAVE_ID, default=DEFAULT_SLAVE_ID): int,
+        vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): int,
+    }
+)
+
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
-    """Validate the user input allows us to connect."""
-    host = data[CONF_HOST]
-    port = data[CONF_PORT]
-    slave_id = data.get(CONF_SLAVE_ID, DEFAULT_SLAVE_ID)
+    """Validate the user input allows us to connect.
 
-    client = ChiltrixModbusClient(host, port, slave_id)
-    
-    # Test connection
-    connected = await hass.async_add_executor_job(client.connect)
-    
-    if not connected:
-        raise CannotConnect("Failed to connect to Chiltrix device")
+    Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
+    """
+    client = ChiltrixModbusClient(
+        host=data[CONF_HOST],
+        port=data[CONF_PORT],
+        slave_id=data[CONF_SLAVE_ID],
+    )
 
-    # Try to read a register to verify communication
     try:
-        result = await hass.async_add_executor_job(
-            client.read_input_register, 1000
-        )
-        if result is None:
-            raise CannotConnect("Cannot read from device")
-    finally:
-        await hass.async_add_executor_job(client.close)
+        if not await client.connect():
+            raise CannotConnect("Failed to connect to the device")
 
-    return {"title": f"Chiltrix CX50-2 ({host})"}
+        # Try to read a test register to verify communication
+        test_result = await client.read_holding_registers(address=0, count=1)
+        if test_result is None:
+            raise CannotConnect("Connected but unable to read data from device")
+
+        await client.disconnect()
+
+    except Exception as err:
+        _LOGGER.error("Error validating connection: %s", err)
+        raise CannotConnect(f"Failed to connect: {err}") from err
+
+    # Return info that you want to store in the config entry.
+    return {"title": f"Chiltrix CX50 ({data[CONF_HOST]})"}
 
 
-class ChiltrixConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Chiltrix CX50-2."""
+class ChiltrixCX50ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Chiltrix CX50."""
 
     VERSION = 1
 
@@ -68,84 +73,26 @@ class ChiltrixConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 info = await validate_input(self.hass, user_input)
             except CannotConnect:
                 errors["base"] = "cannot_connect"
+            except InvalidHost:
+                errors[CONF_HOST] = "invalid_host"
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
                 # Check if already configured
-                await self.async_set_unique_id(
-                    f"{user_input[CONF_HOST]}_{user_input[CONF_PORT]}"
-                )
+                await self.async_set_unique_id(user_input[CONF_HOST])
                 self._abort_if_unique_id_configured()
 
                 return self.async_create_entry(title=info["title"], data=user_input)
 
-        # Show configuration form
-        data_schema = vol.Schema(
-            {
-                vol.Required(CONF_HOST): str,
-                vol.Required(CONF_PORT, default=DEFAULT_PORT): cv.port,
-                vol.Optional(CONF_SLAVE_ID, default=DEFAULT_SLAVE_ID): vol.All(
-                    vol.Coerce(int), vol.Range(min=1, max=247)
-                ),
-                vol.Optional(
-                    CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL
-                ): vol.All(vol.Coerce(int), vol.Range(min=5, max=300)),
-            }
-        )
-
         return self.async_show_form(
-            step_id="user", data_schema=data_schema, errors=errors
-        )
-
-    @staticmethod
-    @callback
-    def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
-    ) -> ChiltrixOptionsFlowHandler:
-        """Get the options flow for this handler."""
-        return ChiltrixOptionsFlowHandler(config_entry)
-
-
-class ChiltrixOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle options flow for Chiltrix integration."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
-
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Manage the options."""
-        if user_input is not None:
-            # Update the config entry with new values
-            self.hass.config_entries.async_update_entry(
-                self.config_entry,
-                data={**self.config_entry.data, **user_input},
-            )
-            return self.async_create_entry(title="", data={})
-
-        # Get current values
-        current_slave_id = self.config_entry.data.get(CONF_SLAVE_ID, DEFAULT_SLAVE_ID)
-        current_scan_interval = self.config_entry.data.get(
-            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
-        )
-
-        return self.async_show_form(
-            step_id="init",
-            data_schema=vol.Schema(
-                {
-                    vol.Optional(
-                        CONF_SLAVE_ID, default=current_slave_id
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=247)),
-                    vol.Optional(
-                        CONF_SCAN_INTERVAL, default=current_scan_interval
-                    ): vol.All(vol.Coerce(int), vol.Range(min=5, max=300)),
-                }
-            ),
+            step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )
 
 
-class CannotConnect(Exception):
+class CannotConnect(HomeAssistantError):
     """Error to indicate we cannot connect."""
+
+
+class InvalidHost(HomeAssistantError):
+    """Error to indicate there is invalid host."""
