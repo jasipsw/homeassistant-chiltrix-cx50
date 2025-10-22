@@ -145,6 +145,10 @@ class ChiltrixModbusClient:
                     lambda: self.client.read_holding_registers(address, count=count),
                 )
 
+            # If result is a coroutine, await it
+            if asyncio.iscoroutine(result):
+                result = await result
+
             if result.isError():
                 # Log detailed error information
                 error_details = f"Function code: {getattr(result, 'function_code', 'N/A')}, "
@@ -191,6 +195,10 @@ class ChiltrixModbusClient:
                     lambda: self.client.write_register(address, value=value),
                 )
 
+            # If result is a coroutine, await it
+            if asyncio.iscoroutine(result):
+                result = await result
+
             if result.isError():
                 _LOGGER.error(f"Error writing register at address {address}: {result}")
                 return False
@@ -232,6 +240,10 @@ class ChiltrixModbusClient:
                     None,
                     lambda: self.client.write_registers(address, values=values),
                 )
+
+            # If result is a coroutine, await it
+            if asyncio.iscoroutine(result):
+                result = await result
 
             if result.isError():
                 _LOGGER.error(
@@ -279,6 +291,10 @@ class ChiltrixModbusClient:
                     lambda: self.client.read_coils(address, count=count),
                 )
 
+            # If result is a coroutine, await it
+            if asyncio.iscoroutine(result):
+                result = await result
+
             if result.isError():
                 _LOGGER.error(f"Error reading coils at address {address}: {result}")
                 return None
@@ -320,6 +336,10 @@ class ChiltrixModbusClient:
                     None,
                     lambda: self.client.write_coil(address, value=value),
                 )
+
+            # If result is a coroutine, await it
+            if asyncio.iscoroutine(result):
+                result = await result
 
             if result.isError():
                 _LOGGER.error(f"Error writing coil at address {address}: {result}")
