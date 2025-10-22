@@ -53,10 +53,9 @@ class ChiltrixModbusClient:
             if self.client:
                 if hasattr(self.client, 'connected') and self.client.connected:
                     _LOGGER.debug("Closing existing connection before reconnecting")
-                    if asyncio.iscoroutinefunction(self.client.close):
-                        await self.client.close()
-                    else:
-                        self.client.close()
+                    close_result = self.client.close()
+                    if asyncio.iscoroutine(close_result):
+                        await close_result
                     await asyncio.sleep(0.5)  # Give time for cleanup
 
             # Create new client instance
@@ -67,15 +66,10 @@ class ChiltrixModbusClient:
                 retries=self.retries,
             )
 
-            # Check if this is an async client
-            if asyncio.iscoroutinefunction(self.client.connect):
-                # Async client
-                result = await self.client.connect()
-            else:
-                # Sync client
-                result = await asyncio.get_event_loop().run_in_executor(
-                    None, self.client.connect
-                )
+            # Connect - may be sync or async
+            result = self.client.connect()
+            if asyncio.iscoroutine(result):
+                result = await result
 
             if result:
                 _LOGGER.info(f"Successfully connected to {self.host}:{self.port}")
@@ -92,9 +86,9 @@ class ChiltrixModbusClient:
         """Disconnect from the Modbus device."""
         try:
             if self.client:
-                await asyncio.get_event_loop().run_in_executor(
-                    None, self.client.close
-                )
+                close_result = self.client.close()
+                if asyncio.iscoroutine(close_result):
+                    await close_result
                 _LOGGER.info("Disconnected from Modbus device")
         except Exception as e:
             _LOGGER.debug(f"Error during disconnect: {e}")
@@ -134,18 +128,10 @@ class ChiltrixModbusClient:
                 return None
 
         try:
-            # Check if async or sync client and call appropriately
-            if asyncio.iscoroutinefunction(self.client.read_holding_registers):
-                # Async client - call directly with slave parameter
-                result = await self.client.read_holding_registers(address, count, slave=self.slave_id)
-            else:
-                # Sync client - only address is positional, count must be keyword arg
-                result = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: self.client.read_holding_registers(address, count=count),
-                )
+            # Call the method directly - it may return a coroutine or a result
+            result = self.client.read_holding_registers(address, count=count)
 
-            # If result is a coroutine, await it
+            # If it's a coroutine, await it
             if asyncio.iscoroutine(result):
                 result = await result
 
@@ -185,17 +171,10 @@ class ChiltrixModbusClient:
                 return False
 
         try:
-            # Check if async or sync client
-            if asyncio.iscoroutinefunction(self.client.write_register):
-                result = await self.client.write_register(address, value, slave=self.slave_id)
-            else:
-                # Sync client - only address is positional
-                result = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: self.client.write_register(address, value=value),
-                )
+            # Call the method directly - it may return a coroutine or a result
+            result = self.client.write_register(address, value=value)
 
-            # If result is a coroutine, await it
+            # If it's a coroutine, await it
             if asyncio.iscoroutine(result):
                 result = await result
 
@@ -231,17 +210,10 @@ class ChiltrixModbusClient:
                 return False
 
         try:
-            # Check if async or sync client
-            if asyncio.iscoroutinefunction(self.client.write_registers):
-                result = await self.client.write_registers(address, values, slave=self.slave_id)
-            else:
-                # Sync client - only address is positional
-                result = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: self.client.write_registers(address, values=values),
-                )
+            # Call the method directly - it may return a coroutine or a result
+            result = self.client.write_registers(address, values=values)
 
-            # If result is a coroutine, await it
+            # If it's a coroutine, await it
             if asyncio.iscoroutine(result):
                 result = await result
 
@@ -281,17 +253,10 @@ class ChiltrixModbusClient:
                 return None
 
         try:
-            # Check if async or sync client
-            if asyncio.iscoroutinefunction(self.client.read_coils):
-                result = await self.client.read_coils(address, count, slave=self.slave_id)
-            else:
-                # Sync client - only address is positional
-                result = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: self.client.read_coils(address, count=count),
-                )
+            # Call the method directly - it may return a coroutine or a result
+            result = self.client.read_coils(address, count=count)
 
-            # If result is a coroutine, await it
+            # If it's a coroutine, await it
             if asyncio.iscoroutine(result):
                 result = await result
 
@@ -327,17 +292,10 @@ class ChiltrixModbusClient:
                 return False
 
         try:
-            # Check if async or sync client
-            if asyncio.iscoroutinefunction(self.client.write_coil):
-                result = await self.client.write_coil(address, value, slave=self.slave_id)
-            else:
-                # Sync client - only address is positional
-                result = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: self.client.write_coil(address, value=value),
-                )
+            # Call the method directly - it may return a coroutine or a result
+            result = self.client.write_coil(address, value=value)
 
-            # If result is a coroutine, await it
+            # If it's a coroutine, await it
             if asyncio.iscoroutine(result):
                 result = await result
 
