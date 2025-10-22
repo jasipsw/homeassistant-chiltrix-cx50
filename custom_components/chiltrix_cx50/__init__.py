@@ -59,21 +59,54 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 281,
             ]
             
-            # Read each register
-            # Note: You could optimize this by reading contiguous ranges in batches
+            # Read each register and map to named keys
+            register_map = {
+                141: "operating_mode",
+                142: "cooling_target",
+                143: "heating_target",
+                144: "dhw_target",
+                200: "c00_temp",
+                201: "c01_temp",
+                202: "ambient_temp",
+                203: "suction_temp",
+                204: "plate_exchange_temp",
+                205: "water_outlet_temp",
+                206: "c06_temp",
+                209: "compressor_current",
+                213: "pump_flow",
+                227: "compressor_frequency",
+                244: "fan_type",
+                245: "ec_fan_1_speed",
+                246: "ec_fan_2_speed",
+                255: "input_voltage",
+                256: "input_current",
+                257: "compressor_phase_current",
+                258: "bus_line_voltage",
+                259: "fan_shutdown_code",
+                260: "ipm_temp",
+                261: "compressor_run_hours",
+                262: "e_heater_power",
+                263: "din6_switch",
+                264: "din7_switch",
+                281: "inlet_water_temp",
+            }
+
             for address in registers_to_read:
                 try:
                     result = await client.read_holding_registers(address, 1)
                     if result and len(result) > 0:
+                        # Store with both numeric address and named key
                         data[address] = result[0]
+                        if address in register_map:
+                            data[register_map[address]] = result[0]
                 except Exception as err:
                     _LOGGER.debug("Error reading register %s: %s", address, err)
                     # Continue reading other registers even if one fails
                     continue
-            
+
             if not data:
                 raise UpdateFailed("No data received from device")
-            
+
             return data
             
         except Exception as err:

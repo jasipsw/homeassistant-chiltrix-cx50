@@ -90,6 +90,12 @@ STATE_DHW = 4
 STATE_DEFROST = 5
 STATE_ERROR = 6
 
+# Mode constants for climate entity
+MODE_OFF = 0
+MODE_HEAT = 1
+MODE_COOL = 2
+MODE_AUTO = 3
+
 # Temperature limits (in Celsius)
 MIN_SETPOINT_TEMP = 15
 MAX_SETPOINT_TEMP = 60
@@ -107,4 +113,4 @@ MIN_FAN_SPEED = 20
 MAX_FAN_SPEED = 100
 
 # Platforms
-PLATFORMS = ["sensor"]
+PLATFORMS = ["sensor", "binary_sensor", "climate", "switch", "number", "select"]
