@@ -192,6 +192,9 @@ async def async_setup_entry(
         ),
     ]
 
+    # Add COP sensor (calculated)
+    sensors.append(ChiltrixCOPSensor(coordinator, entry))
+
     async_add_entities(sensors)
 
 
@@ -232,3 +235,66 @@ class ChiltrixSensor(CoordinatorEntity, SensorEntity):
         if value is None:
             return None
         return value * self._scale
+
+
+class ChiltrixCOPSensor(CoordinatorEntity, SensorEntity):
+    """Chiltrix COP (Coefficient of Performance) sensor."""
+
+    def __init__(self, coordinator, entry: ConfigEntry) -> None:
+        """Initialize the COP sensor."""
+        super().__init__(coordinator)
+        self._attr_name = "Chiltrix COP"
+        self._attr_unique_id = f"{entry.entry_id}_cop"
+        self._attr_native_unit_of_measurement = None
+        self._attr_device_class = None
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:gauge"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)},
+            "name": "Chiltrix CX50-2 Heat Pump",
+            "manufacturer": "Chiltrix",
+            "model": "CX50-2",
+        }
+
+    @property
+    def native_value(self) -> float | None:
+        """Calculate and return the COP."""
+        # COP = Thermal Power Output / Electrical Power Input
+        # Thermal Power (W) = Flow Rate (L/min) × Specific Heat (4.186 kJ/kg·K) × Temp Difference (K) × Density (kg/L)
+        # For water: Thermal Power (W) = Flow Rate (L/min) × 4.186 × ΔT × (1000/60) = Flow × 69.77 × ΔT
+
+        flow_rate = self.coordinator.data.get("pump_flow")  # Raw value, needs 0.1 scale
+        inlet_temp = self.coordinator.data.get("inlet_water_temp")
+        outlet_temp = self.coordinator.data.get("water_outlet_temp")
+        input_voltage = self.coordinator.data.get("input_voltage")
+        input_current = self.coordinator.data.get("input_current")
+
+        if None in (flow_rate, inlet_temp, outlet_temp, input_voltage, input_current):
+            return None
+
+        # Avoid division by zero
+        if input_voltage == 0 or input_current == 0:
+            return None
+
+        # Calculate values
+        flow_lpm = flow_rate * 0.1  # Scale flow rate
+        temp_diff = abs(outlet_temp - inlet_temp)
+
+        # Thermal power in watts
+        # Flow (L/min) × 4186 (J/kg·K) × ΔT (K) × (1 kg/L) / 60 (s/min)
+        thermal_power = flow_lpm * 4186 * temp_diff / 60
+
+        # Electrical power in watts
+        electrical_power = input_voltage * input_current
+
+        # Avoid division by zero and unrealistic values
+        if electrical_power < 10:  # Less than 10W doesn't make sense
+            return None
+
+        cop = thermal_power / electrical_power
+
+        # Sanity check: COP should be between 0.5 and 10 for a heat pump
+        if 0.5 <= cop <= 10:
+            return round(cop, 2)
+
+        return None
