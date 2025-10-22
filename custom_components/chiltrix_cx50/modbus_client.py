@@ -1,7 +1,6 @@
 """Modbus TCP client for Chiltrix CX50."""
 import logging
 import asyncio
-from functools import partial
 from typing import Any, Optional
 from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ModbusException
@@ -123,14 +122,13 @@ class ChiltrixModbusClient:
                 return None
 
         try:
-            # Use keyword arguments for pymodbus 3.x compatibility
+            # Use lambda to pass keyword arguments for pymodbus 3.x compatibility
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                partial(
-                    self.client.read_holding_registers,
+                lambda: self.client.read_holding_registers(
                     address=address,
                     count=count,
-                    slave_id=self.slave_id,
+                    slave=self.slave_id,
                 ),
             )
 
@@ -172,11 +170,10 @@ class ChiltrixModbusClient:
         try:
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                partial(
-                    self.client.write_register,
+                lambda: self.client.write_register(
                     address=address,
                     value=value,
-                    slave_id=self.slave_id,
+                    slave=self.slave_id,
                 ),
             )
 
@@ -214,11 +211,10 @@ class ChiltrixModbusClient:
         try:
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                partial(
-                    self.client.write_registers,
+                lambda: self.client.write_registers(
                     address=address,
                     values=values,
-                    slave_id=self.slave_id,
+                    slave=self.slave_id,
                 ),
             )
 
@@ -260,11 +256,10 @@ class ChiltrixModbusClient:
         try:
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                partial(
-                    self.client.read_coils,
+                lambda: self.client.read_coils(
                     address=address,
                     count=count,
-                    slave_id=self.slave_id,
+                    slave=self.slave_id,
                 ),
             )
 
@@ -302,11 +297,10 @@ class ChiltrixModbusClient:
         try:
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                partial(
-                    self.client.write_coil,
+                lambda: self.client.write_coil(
                     address=address,
                     value=value,
-                    slave_id=self.slave_id,
+                    slave=self.slave_id,
                 ),
             )
 
