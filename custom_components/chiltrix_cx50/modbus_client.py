@@ -139,10 +139,10 @@ class ChiltrixModbusClient:
                 # Async client - call directly with slave parameter
                 result = await self.client.read_holding_registers(address, count, slave=self.slave_id)
             else:
-                # Sync client - use executor, try without slave parameter first
+                # Sync client - only address is positional, count must be keyword arg
                 result = await asyncio.get_event_loop().run_in_executor(
                     None,
-                    lambda: self.client.read_holding_registers(address, count),
+                    lambda: self.client.read_holding_registers(address, count=count),
                 )
 
             if result.isError():
@@ -181,10 +181,15 @@ class ChiltrixModbusClient:
                 return False
 
         try:
-            result = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self.client.write_register(address, value=value, unit=self.slave_id),
-            )
+            # Check if async or sync client
+            if asyncio.iscoroutinefunction(self.client.write_register):
+                result = await self.client.write_register(address, value, slave=self.slave_id)
+            else:
+                # Sync client - only address is positional
+                result = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: self.client.write_register(address, value=value),
+                )
 
             if result.isError():
                 _LOGGER.error(f"Error writing register at address {address}: {result}")
@@ -218,10 +223,15 @@ class ChiltrixModbusClient:
                 return False
 
         try:
-            result = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self.client.write_registers(address, values=values, unit=self.slave_id),
-            )
+            # Check if async or sync client
+            if asyncio.iscoroutinefunction(self.client.write_registers):
+                result = await self.client.write_registers(address, values, slave=self.slave_id)
+            else:
+                # Sync client - only address is positional
+                result = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: self.client.write_registers(address, values=values),
+                )
 
             if result.isError():
                 _LOGGER.error(
@@ -259,10 +269,15 @@ class ChiltrixModbusClient:
                 return None
 
         try:
-            result = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self.client.read_coils(address, count=count, unit=self.slave_id),
-            )
+            # Check if async or sync client
+            if asyncio.iscoroutinefunction(self.client.read_coils):
+                result = await self.client.read_coils(address, count, slave=self.slave_id)
+            else:
+                # Sync client - only address is positional
+                result = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: self.client.read_coils(address, count=count),
+                )
 
             if result.isError():
                 _LOGGER.error(f"Error reading coils at address {address}: {result}")
@@ -296,10 +311,15 @@ class ChiltrixModbusClient:
                 return False
 
         try:
-            result = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self.client.write_coil(address, value=value, unit=self.slave_id),
-            )
+            # Check if async or sync client
+            if asyncio.iscoroutinefunction(self.client.write_coil):
+                result = await self.client.write_coil(address, value, slave=self.slave_id)
+            else:
+                # Sync client - only address is positional
+                result = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: self.client.write_coil(address, value=value),
+                )
 
             if result.isError():
                 _LOGGER.error(f"Error writing coil at address {address}: {result}")
