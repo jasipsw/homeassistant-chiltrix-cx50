@@ -42,11 +42,21 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         if not await client.connect():
             raise CannotConnect("Failed to connect to the device")
 
-        # Try to read a test register to verify communication
-        # Use address 0xCA (202) which appears to work based on device logs
-        test_result = await client.read_holding_registers(address=0xCA, count=1)
-        if test_result is None:
-            raise CannotConnect("Connected but unable to read data from device")
+        # Try to read test registers to verify communication
+        # Try multiple addresses that appear in device logs as working
+        test_addresses = [0xF3, 0xF4, 0x100, 0x119]  # Operating state, error code, power, run hours
+        test_success = False
+        
+        for address in test_addresses:
+            test_result = await client.read_holding_registers(address=address, count=1)
+            if test_result is not None:
+                _LOGGER.info(f"Successfully read test register at address 0x{address:X}")
+                test_success = True
+                break
+            _LOGGER.debug(f"Failed to read test register at address 0x{address:X}, trying next...")
+        
+        if not test_success:
+            raise CannotConnect("Connected but unable to read data from device. Register addresses may need adjustment.")
 
         await client.disconnect()
 
