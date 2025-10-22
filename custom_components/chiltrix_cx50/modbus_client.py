@@ -130,7 +130,7 @@ class ChiltrixModbusClient:
                     self.client.read_holding_registers,
                     address=address,
                     count=count,
-                    slave=self.slave_id,
+                    slave_id=self.slave_id,
                 ),
             )
 
@@ -176,7 +176,7 @@ class ChiltrixModbusClient:
                     self.client.write_register,
                     address=address,
                     value=value,
-                    slave=self.slave_id,
+                    slave_id=self.slave_id,
                 ),
             )
 
@@ -218,7 +218,7 @@ class ChiltrixModbusClient:
                     self.client.write_registers,
                     address=address,
                     values=values,
-                    slave=self.slave_id,
+                    slave_id=self.slave_id,
                 ),
             )
 
@@ -264,7 +264,7 @@ class ChiltrixModbusClient:
                     self.client.read_coils,
                     address=address,
                     count=count,
-                    slave=self.slave_id,
+                    slave_id=self.slave_id,
                 ),
             )
 
@@ -306,7 +306,7 @@ class ChiltrixModbusClient:
                     self.client.write_coil,
                     address=address,
                     value=value,
-                    slave=self.slave_id,
+                    slave_id=self.slave_id,
                 ),
             )
 
