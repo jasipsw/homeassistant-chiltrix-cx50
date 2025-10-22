@@ -122,10 +122,10 @@ class ChiltrixModbusClient:
                 return None
 
         try:
-            # Use lambda with positional arguments for pymodbus 3.x compatibility
+            # pymodbus 3.x may only accept address as positional, rest as kwargs
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: self.client.read_holding_registers(address, count, self.slave_id),
+                lambda: self.client.read_holding_registers(address, count=count, unit=self.slave_id),
             )
 
             if result.isError():
@@ -166,7 +166,7 @@ class ChiltrixModbusClient:
         try:
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: self.client.write_register(address, value, self.slave_id),
+                lambda: self.client.write_register(address, value=value, unit=self.slave_id),
             )
 
             if result.isError():
@@ -203,7 +203,7 @@ class ChiltrixModbusClient:
         try:
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: self.client.write_registers(address, values, self.slave_id),
+                lambda: self.client.write_registers(address, values=values, unit=self.slave_id),
             )
 
             if result.isError():
@@ -244,7 +244,7 @@ class ChiltrixModbusClient:
         try:
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: self.client.read_coils(address, count, self.slave_id),
+                lambda: self.client.read_coils(address, count=count, unit=self.slave_id),
             )
 
             if result.isError():
@@ -281,7 +281,7 @@ class ChiltrixModbusClient:
         try:
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: self.client.write_coil(address, value, self.slave_id),
+                lambda: self.client.write_coil(address, value=value, unit=self.slave_id),
             )
 
             if result.isError():
