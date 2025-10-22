@@ -1,119 +1,234 @@
-"""The Chiltrix CX50 integration."""
-import logging
-from datetime import timedelta
+"""Sensor platform for Chiltrix CX50-2."""
+from __future__ import annotations
 
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
+from homeassistant.const import (
+    UnitOfElectricCurrent,
+    UnitOfElectricPotential,
+    UnitOfEnergy,
+    UnitOfFrequency,
+    UnitOfTemperature,
+    UnitOfTime,
+    UnitOfVolumeFlowRate,
+)
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, PLATFORMS
-from .modbus_client import ChiltrixModbusClient
-
-_LOGGER = logging.getLogger(__name__)
+from .const import DOMAIN
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Chiltrix CX50 from a config entry."""
-    host = entry.data["host"]
-    port = entry.data.get("port", 502)
-    slave_id = entry.data.get("slave_id", 1)
-    scan_interval = entry.data.get("scan_interval", 30)
-    
-    # Create Modbus client
-    client = ChiltrixModbusClient(
-        host=host,
-        port=port,
-        slave_id=slave_id,
-    )
-    
-    # Connect to device
-    if not await client.connect():
-        _LOGGER.error("Failed to connect to Chiltrix CX50 at %s:%s", host, port)
-        return False
-    
-    # Create data update coordinator
-    async def async_update_data():
-        """Fetch data from Chiltrix."""
-        try:
-            data = {}
-            
-            # Define all registers we need to read - based on working YAML config
-            registers_to_read = [
-                # Operating mode and setpoints (141-144)
-                141, 142, 143, 144,
-                
-                # Temperature sensors C00-C06 (200-206)
-                200, 201, 202, 203, 204, 205, 206,
-                
-                # Performance registers (209, 213-246)
-                209, 213, 214, 215, 216, 217, 218, 219, 220,
-                221, 222, 223, 224, 225, 226, 227, 228, 229, 230,
-                231, 232, 233, 234, 235, 236, 237, 238, 239, 240,
-                241, 242, 243, 244, 245, 246,
-                
-                # Electrical and system status (255-264)
-                255, 256, 257, 258, 259, 260, 261, 262, 263, 264,
-                
-                # Inlet water temp (281)
-                281,
-            ]
-            
-            # Read each register
-            # Note: You could optimize this by reading contiguous ranges in batches
-            for address in registers_to_read:
-                try:
-                    result = await client.read_holding_registers(address, 1)
-                    if result and len(result) > 0:
-                        data[address] = result[0]
-                except Exception as err:
-                    _LOGGER.debug("Error reading register %s: %s", address, err)
-                    # Continue reading other registers even if one fails
-                    continue
-            
-            if not data:
-                raise UpdateFailed("No data received from device")
-            
-            return data
-            
-        except Exception as err:
-            _LOGGER.error("Error communicating with Chiltrix: %s", err)
-            raise UpdateFailed(f"Error communicating with device: {err}")
-    
-    coordinator = DataUpdateCoordinator(
-        hass,
-        _LOGGER,
-        name=f"Chiltrix CX50 {host}",
-        update_method=async_update_data,
-        update_interval=timedelta(seconds=scan_interval),
-    )
-    
-    # Fetch initial data
-    await coordinator.async_config_entry_first_refresh()
-    
-    # Store coordinator and client
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = {
-        "coordinator": coordinator,
-        "client": client,
-    }
-    
-    # Forward entry setup to platforms
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    
-    return True
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up Chiltrix sensors."""
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+
+    sensors = [
+        # Temperature sensors
+        ChiltrixSensor(
+            coordinator,
+            entry,
+            "water_outlet_temp",
+            "Water Outlet Temperature",
+            UnitOfTemperature.CELSIUS,
+            SensorDeviceClass.TEMPERATURE,
+            SensorStateClass.MEASUREMENT,
+        ),
+        ChiltrixSensor(
+            coordinator,
+            entry,
+            "inlet_water_temp",
+            "Inlet Water Temperature",
+            UnitOfTemperature.CELSIUS,
+            SensorDeviceClass.TEMPERATURE,
+            SensorStateClass.MEASUREMENT,
+        ),
+        ChiltrixSensor(
+            coordinator,
+            entry,
+            "ambient_temp",
+            "Ambient Temperature",
+            UnitOfTemperature.CELSIUS,
+            SensorDeviceClass.TEMPERATURE,
+            SensorStateClass.MEASUREMENT,
+        ),
+        ChiltrixSensor(
+            coordinator,
+            entry,
+            "suction_temp",
+            "Suction Temperature",
+            UnitOfTemperature.CELSIUS,
+            SensorDeviceClass.TEMPERATURE,
+            SensorStateClass.MEASUREMENT,
+        ),
+        ChiltrixSensor(
+            coordinator,
+            entry,
+            "plate_exchange_temp",
+            "Plate Exchange Temperature",
+            UnitOfTemperature.CELSIUS,
+            SensorDeviceClass.TEMPERATURE,
+            SensorStateClass.MEASUREMENT,
+        ),
+        ChiltrixSensor(
+            coordinator,
+            entry,
+            "ipm_temp",
+            "IPM Temperature",
+            UnitOfTemperature.CELSIUS,
+            SensorDeviceClass.TEMPERATURE,
+            SensorStateClass.MEASUREMENT,
+        ),
+        # Electrical sensors
+        ChiltrixSensor(
+            coordinator,
+            entry,
+            "input_voltage",
+            "Input Voltage",
+            UnitOfElectricPotential.VOLT,
+            SensorDeviceClass.VOLTAGE,
+            SensorStateClass.MEASUREMENT,
+        ),
+        ChiltrixSensor(
+            coordinator,
+            entry,
+            "input_current",
+            "Input Current",
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            SensorStateClass.MEASUREMENT,
+        ),
+        ChiltrixSensor(
+            coordinator,
+            entry,
+            "compressor_current",
+            "Compressor Current",
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            SensorStateClass.MEASUREMENT,
+        ),
+        ChiltrixSensor(
+            coordinator,
+            entry,
+            "compressor_phase_current",
+            "Compressor Phase Current",
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            SensorStateClass.MEASUREMENT,
+        ),
+        ChiltrixSensor(
+            coordinator,
+            entry,
+            "bus_line_voltage",
+            "Bus Line Voltage",
+            UnitOfElectricPotential.VOLT,
+            SensorDeviceClass.VOLTAGE,
+            SensorStateClass.MEASUREMENT,
+        ),
+        # Performance sensors
+        ChiltrixSensor(
+            coordinator,
+            entry,
+            "pump_flow",
+            "Pump Flow Rate",
+            "L/min",
+            None,
+            SensorStateClass.MEASUREMENT,
+            scale=0.1,
+        ),
+        ChiltrixSensor(
+            coordinator,
+            entry,
+            "compressor_frequency",
+            "Compressor Frequency",
+            UnitOfFrequency.HERTZ,
+            SensorDeviceClass.FREQUENCY,
+            SensorStateClass.MEASUREMENT,
+        ),
+        ChiltrixSensor(
+            coordinator,
+            entry,
+            "ec_fan_1_speed",
+            "EC Fan 1 Speed",
+            "%",
+            None,
+            SensorStateClass.MEASUREMENT,
+        ),
+        ChiltrixSensor(
+            coordinator,
+            entry,
+            "ec_fan_2_speed",
+            "EC Fan 2 Speed",
+            "%",
+            None,
+            SensorStateClass.MEASUREMENT,
+        ),
+        # Runtime sensors
+        ChiltrixSensor(
+            coordinator,
+            entry,
+            "compressor_run_hours",
+            "Compressor Run Hours",
+            UnitOfTime.HOURS,
+            SensorDeviceClass.DURATION,
+            SensorStateClass.TOTAL_INCREASING,
+        ),
+        ChiltrixSensor(
+            coordinator,
+            entry,
+            "e_heater_power",
+            "Electric Heater Power",
+            "W",
+            SensorDeviceClass.POWER,
+            SensorStateClass.MEASUREMENT,
+        ),
+    ]
+
+    async_add_entities(sensors)
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    
-    if unload_ok:
-        # Close Modbus connection
-        client = hass.data[DOMAIN][entry.entry_id]["client"]
-        await client.disconnect()
-        
-        # Remove data
-        hass.data[DOMAIN].pop(entry.entry_id)
-    
-    return unload_ok
+class ChiltrixSensor(CoordinatorEntity, SensorEntity):
+    """Chiltrix sensor entity."""
+
+    def __init__(
+        self,
+        coordinator,
+        entry: ConfigEntry,
+        data_key: str,
+        name: str,
+        unit: str | None,
+        device_class: SensorDeviceClass | None,
+        state_class: SensorStateClass | None,
+        scale: float = 1.0,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._data_key = data_key
+        self._scale = scale
+        self._attr_name = f"Chiltrix {name}"
+        self._attr_unique_id = f"{entry.entry_id}_{data_key}"
+        self._attr_native_unit_of_measurement = unit
+        self._attr_device_class = device_class
+        self._attr_state_class = state_class
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)},
+            "name": "Chiltrix CX50-2 Heat Pump",
+            "manufacturer": "Chiltrix",
+            "model": "CX50-2",
+        }
+
+    @property
+    def native_value(self) -> float | int | None:
+        """Return the state of the sensor."""
+        value = self.coordinator.data.get(self._data_key)
+        if value is None:
+            return None
+        return value * self._scale
