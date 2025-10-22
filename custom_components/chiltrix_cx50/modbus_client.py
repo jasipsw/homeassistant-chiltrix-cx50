@@ -2,7 +2,10 @@
 import logging
 import asyncio
 from typing import Any, Optional
-from pymodbus.client import ModbusTcpClient
+try:
+    from pymodbus.client import AsyncModbusTcpClient as ModbusTcpClient
+except ImportError:
+    from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ModbusException
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,17 +44,21 @@ class ChiltrixModbusClient:
 
     async def connect(self) -> bool:
         """Connect to the Modbus device.
-        
+
         Returns:
             bool: True if connection successful, False otherwise
         """
         try:
             # Close any existing connection
-            if self.client and self.client.connected:
-                _LOGGER.debug("Closing existing connection before reconnecting")
-                self.client.close()
-                await asyncio.sleep(0.5)  # Give time for cleanup
-            
+            if self.client:
+                if hasattr(self.client, 'connected') and self.client.connected:
+                    _LOGGER.debug("Closing existing connection before reconnecting")
+                    if asyncio.iscoroutinefunction(self.client.close):
+                        await self.client.close()
+                    else:
+                        self.client.close()
+                    await asyncio.sleep(0.5)  # Give time for cleanup
+
             # Create new client instance
             self.client = ModbusTcpClient(
                 host=self.host,
@@ -59,19 +66,24 @@ class ChiltrixModbusClient:
                 timeout=self.timeout,
                 retries=self.retries,
             )
-            
-            # Attempt connection
-            result = await asyncio.get_event_loop().run_in_executor(
-                None, self.client.connect
-            )
-            
+
+            # Check if this is an async client
+            if asyncio.iscoroutinefunction(self.client.connect):
+                # Async client
+                result = await self.client.connect()
+            else:
+                # Sync client
+                result = await asyncio.get_event_loop().run_in_executor(
+                    None, self.client.connect
+                )
+
             if result:
                 _LOGGER.info(f"Successfully connected to {self.host}:{self.port}")
             else:
                 _LOGGER.error(f"Failed to connect to {self.host}:{self.port}")
-                
+
             return result
-            
+
         except Exception as e:
             _LOGGER.error(f"Connection error: {e}", exc_info=True)
             return False
@@ -122,11 +134,16 @@ class ChiltrixModbusClient:
                 return None
 
         try:
-            # pymodbus 3.x may only accept address as positional, rest as kwargs
-            result = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self.client.read_holding_registers(address, count=count, unit=self.slave_id),
-            )
+            # Check if async or sync client and call appropriately
+            if asyncio.iscoroutinefunction(self.client.read_holding_registers):
+                # Async client - call directly with slave parameter
+                result = await self.client.read_holding_registers(address, count, slave=self.slave_id)
+            else:
+                # Sync client - use executor, try without slave parameter first
+                result = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: self.client.read_holding_registers(address, count),
+                )
 
             if result.isError():
                 # Log detailed error information
